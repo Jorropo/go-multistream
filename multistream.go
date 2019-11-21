@@ -134,6 +134,12 @@ func (msm *MultistreamMuxer) AddHandler(protocol string, handler HandlerFunc) {
 	msm.AddHandlerWithFunc(protocol, fulltextMatch(protocol), handler)
 }
 
+// Same as `AddHandler` but return error instead of overriding if an handler is
+// set.
+func (msm *MultistreamMuxer) AddHandlerSafe(protocol string, handler HandlerFunc) error {
+	return msm.AddHandlerWithFuncSafe(protocol, fulltextMatch(protocol), handler)
+}
+
 // AddHandlerWithFunc attaches a new protocol handler to the muxer with a match.
 // If the match function returns true for a given protocol tag, the protocol
 // will be selected even if the handler name and protocol tags are different.
@@ -147,6 +153,27 @@ func (msm *MultistreamMuxer) AddHandlerWithFunc(protocol string, match func(stri
 		Handle:    handler,
 		AddName:   protocol,
 	})
+}
+
+var ErrSetRegisteredSafely = errors.New("Trying to register a set handler safely")
+
+// Same as `AddHandlerWithFunc` but return an error instead of overriding if an
+// handler is set.
+func (msm *MultistreamMuxer) AddHandlerWithFuncSafe(protocol string, match func(string) bool, handler HandlerFunc) error {
+	msm.handlerlock.Lock()
+	defer msm.handlerlock.Unlock()
+
+	for _, v := range msm.handlers {
+		if v.AddName == protocol {
+			return ErrSetRegisteredSafely
+		}
+	}
+	msm.handlers = append(msm.handlers, Handler{
+		MatchFunc: match,
+		Handle:    handler,
+		AddName:   protocol,
+	})
+	return nil
 }
 
 // RemoveHandler removes the handler with the given name from the muxer.
